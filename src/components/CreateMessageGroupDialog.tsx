@@ -269,7 +269,7 @@ export function CreateMessageGroupDialog({
               Disparar para todas as categorias?
             </Label>
             <p className="text-sm text-slate-600">
-              Ative para enviar a mesma mensagem para todos os tipos
+              Ative para enviar a mesma mensagem para todas as categorias
             </p>
           </div>
           <Switch
