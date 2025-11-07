@@ -4,8 +4,10 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
+import { Switch } from './ui/switch';
 import { Loader2, Save, Upload, X } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { decodeUnicode } from './utils/decodeUnicode';
 
 interface Message {
   id: number;
@@ -40,34 +42,50 @@ export function MessageEditDialog({ open, onOpenChange, messageGroup, onSave }: 
   const [editedGroup, setEditedGroup] = useState<MessageGroup | null>(null);
   const [originalGroup, setOriginalGroup] = useState<MessageGroup | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isGeneral, setIsGeneral] = useState(false);
 
   useEffect(() => {
     if (messageGroup) {
-      // Garantir que todas as categorias estejam presentes
-      const allMessages: Message[] = CATEGORIAS_PREDEFINIDAS.map((categoria, index) => {
-        const existingMsg = messageGroup.mensagens.find(m => m.categoria === categoria);
-        if (existingMsg) {
-          return { ...existingMsg };
-        } else {
-          // Criar mensagem vazia para categorias que não existem
-          return {
-            id: -1 * (index + 1), // ID temporário negativo para novas mensagens
-            categoria,
-            conteudo: '',
-            midiaExtension: undefined,
-            midiaBase64: undefined
-          };
-        }
-      });
+      // Verificar se é uma mensagem geral
+      const hasGeneralCategory = messageGroup.mensagens.some(m => m.categoria === 'Geral');
+      setIsGeneral(hasGeneralCategory);
 
-      const groupCopy = {
-        ...messageGroup,
-        mensagens: allMessages
-      };
-      
-      setEditedGroup(groupCopy);
-      // Manter uma cópia dos valores originais para comparação
-      setOriginalGroup(JSON.parse(JSON.stringify(groupCopy)));
+      if (hasGeneralCategory) {
+        // Se for mensagem geral, manter apenas a mensagem "Geral"
+        const generalMsg = messageGroup.mensagens.find(m => m.categoria === 'Geral');
+        const groupCopy = {
+          ...messageGroup,
+          mensagens: generalMsg ? [generalMsg] : []
+        };
+        setEditedGroup(groupCopy);
+        setOriginalGroup(JSON.parse(JSON.stringify(groupCopy)));
+      } else {
+        // Garantir que todas as categorias estejam presentes
+        const allMessages: Message[] = CATEGORIAS_PREDEFINIDAS.map((categoria, index) => {
+          const existingMsg = messageGroup.mensagens.find(m => m.categoria === categoria);
+          if (existingMsg) {
+            return { ...existingMsg };
+          } else {
+            // Criar mensagem vazia para categorias que não existem
+            return {
+              id: -1 * (index + 1), // ID temporário negativo para novas mensagens
+              categoria,
+              conteudo: '',
+              midiaExtension: undefined,
+              midiaBase64: undefined
+            };
+          }
+        });
+
+        const groupCopy = {
+          ...messageGroup,
+          mensagens: allMessages
+        };
+        
+        setEditedGroup(groupCopy);
+        // Manter uma cópia dos valores originais para comparação
+        setOriginalGroup(JSON.parse(JSON.stringify(groupCopy)));
+      }
     }
   }, [messageGroup]);
 
@@ -77,7 +95,7 @@ export function MessageEditDialog({ open, onOpenChange, messageGroup, onSave }: 
     const updatedMessages = [...editedGroup.mensagens];
     updatedMessages[index] = {
       ...updatedMessages[index],
-      conteudo: value
+      conteudo: decodeUnicode(value) // Decodificar unicode ao atualizar
     };
     
     setEditedGroup({
@@ -207,6 +225,17 @@ export function MessageEditDialog({ open, onOpenChange, messageGroup, onSave }: 
           throw new Error('Erro ao atualizar mensagens');
         }
 
+        // Verificar se há conteúdo antes de fazer parse (opcional para esta operação)
+        const text = await response.text();
+        if (text && text.trim() !== '') {
+          try {
+            const result = JSON.parse(text);
+            console.log('Resposta da API:', result);
+          } catch (parseError) {
+            console.warn('Resposta não é JSON válido, mas operação foi bem sucedida', parseError);
+          }
+        }
+
         toast.success(`${modifiedMessages.length} mensagem(ns) atualizada(s) com sucesso!`);
       } else {
         toast.info('Nenhuma alteração foi feita');
@@ -255,13 +284,103 @@ export function MessageEditDialog({ open, onOpenChange, messageGroup, onSave }: 
         <DialogHeader>
           <DialogTitle>Editar Mensagens</DialogTitle>
           <DialogDescription>
-            Edite as mensagens do grupo. As alterações serão enviadas para o webhook.
+            {isGeneral 
+              ? 'Editando mensagem geral que será disparada para todas as categorias.'
+              : 'Edite as mensagens do grupo. As alterações serão enviadas para o webhook.'
+            }
           </DialogDescription>
         </DialogHeader>
 
+        {/* Switch para mensagem geral - desabilitado na edição */}
+        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border">
+          <div className="space-y-0.5">
+            <Label className="text-slate-900">
+              Disparar para todas as categorias?
+            </Label>
+            <p className="text-sm text-slate-600">
+              {isGeneral ? 'Este grupo foi criado como mensagem geral' : 'Este grupo foi criado com categorias específicas'}
+            </p>
+          </div>
+          <Switch
+            checked={isGeneral}
+            disabled={true}
+          />
+        </div>
+
         <ScrollArea className="h-[60vh] pr-4">
           <div className="space-y-6">
-            {editedGroup.mensagens.map((msg, index) => (
+            {isGeneral ? (
+              // Campo único para mensagem geral
+              <div className="space-y-4 p-4 border rounded-lg bg-slate-50">
+                <h4 className="text-slate-900">Mensagem Geral</h4>
+
+                {/* Upload de Mídia */}
+                <div className="space-y-2">
+                  <Label className="text-slate-900">Mídia (opcional)</Label>
+                  {editedGroup.mensagens[0]?.midiaBase64 ? (
+                    <div className="relative border rounded-lg p-4 bg-white">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-slate-700">
+                          Arquivo anexado: {editedGroup.mensagens[0].midiaExtension}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeMedia(0)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      {/* Preview da mídia */}
+                      {editedGroup.mensagens[0].midiaExtension?.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                        <img
+                          src={`data:image/${editedGroup.mensagens[0].midiaExtension.substring(1)};base64,${editedGroup.mensagens[0].midiaBase64}`}
+                          alt="Preview"
+                          className="max-w-full h-auto max-h-48 rounded"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*,video/mp4,application/pdf';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) handleFileUpload(0, file);
+                          };
+                          input.click();
+                        }}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Anexar Mídia
+                      </Button>
+                      <span className="text-sm text-slate-600">
+                        Imagens, vídeos ou PDF (máx. 10MB)
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="conteudo-geral" className="text-slate-900">Conteúdo</Label>
+                  <Textarea
+                    id="conteudo-geral"
+                    value={editedGroup.mensagens[0]?.conteudo || ''}
+                    onChange={(e) => updateMessage(0, e.target.value)}
+                    placeholder="Digite o conteúdo da mensagem que será enviada para todas as categorias"
+                    className="min-h-[150px] text-slate-900"
+                  />
+                </div>
+              </div>
+            ) : (
+              // Campos para cada categoria
+              editedGroup.mensagens.map((msg, index) => (
               <div key={msg.categoria} className="space-y-4 p-4 border rounded-lg bg-slate-50">
                 <h4 className="text-slate-900">Categoria {msg.categoria}</h4>
 
@@ -329,7 +448,8 @@ export function MessageEditDialog({ open, onOpenChange, messageGroup, onSave }: 
                   />
                 </div>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </ScrollArea>
 

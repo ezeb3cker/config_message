@@ -47,6 +47,62 @@ export function FileUpload({ onFileSelected, onSpreadsheetDataExtracted, uploade
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const data = utils.sheet_to_json(firstSheet);
 
+      // Validar se o arquivo possui as colunas obrigatórias
+      if (data.length === 0) {
+        toast.error('O arquivo está vazio. Por favor, selecione um arquivo com dados.');
+        setFile(null);
+        onFileSelected(null);
+        if (inputRef.current) {
+          inputRef.current.value = '';
+        }
+        return;
+      }
+
+      // Verificar se as colunas "categoria" e "telefone" (ou "número") existem
+      const firstRow = data[0];
+      const columns = Object.keys(firstRow);
+      
+      // Normalizar colunas removendo espaços, acentos, pontos e convertendo para minúsculo
+      const normalizeColumn = (col: string) => {
+        return col
+          .toLowerCase()
+          .trim()
+          .replace(/:/g, '') // Remove dois pontos
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
+      };
+      
+      const normalizedColumns = columns.map(normalizeColumn);
+      
+      console.log('Colunas detectadas:', columns);
+      console.log('Colunas normalizadas:', normalizedColumns);
+      
+      const hasCategoria = normalizedColumns.includes('categoria');
+      const hasNumero = normalizedColumns.includes('numero');
+      const hasTelefone = normalizedColumns.includes('telefone');
+      const hasCelular = normalizedColumns.includes('celular');
+      
+      // Aceita se tiver categoria E (número OU telefone OU celular)
+      const hasContactColumn = hasNumero || hasTelefone || hasCelular;
+
+      if (!hasCategoria || !hasContactColumn) {
+        const missingColumns = [];
+        if (!hasCategoria) missingColumns.push('categoria');
+        if (!hasContactColumn) missingColumns.push('número/telefone/celular');
+        
+        toast.error(
+          `O arquivo não possui ${missingColumns.length === 1 ? 'a coluna obrigatória' : 'as colunas obrigatórias'}: ${missingColumns.join(', ')}. ` +
+          'Certifique-se de que a primeira linha do arquivo contém essas colunas.'
+        );
+        
+        setFile(null);
+        onFileSelected(null);
+        if (inputRef.current) {
+          inputRef.current.value = '';
+        }
+        return;
+      }
+
       // Passar os dados extraídos da planilha para o componente pai
       onSpreadsheetDataExtracted(data);
       
@@ -54,6 +110,11 @@ export function FileUpload({ onFileSelected, onSpreadsheetDataExtracted, uploade
     } catch (error) {
       console.error('Erro ao processar arquivo:', error);
       toast.error('Erro ao processar arquivo. Tente novamente.');
+      setFile(null);
+      onFileSelected(null);
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ import { MessageEditDialog } from './MessageEditDialog';
 import { CreateMessageGroupDialog } from './CreateMessageGroupDialog';
 import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
+import { decodeUnicode } from './utils/decodeUnicode';
 
 interface Message {
   id: number;
@@ -77,6 +78,17 @@ export function MessageSelector({ messages, onSelectMessage, onUpdateMessage, on
 
       if (!response.ok) {
         throw new Error('Erro ao excluir grupo de mensagens');
+      }
+
+      // Verificar se há conteúdo antes de fazer parse (opcional para esta operação)
+      const text = await response.text();
+      if (text && text.trim() !== '') {
+        try {
+          const result = JSON.parse(text);
+          console.log('Resposta da API:', result);
+        } catch (parseError) {
+          console.warn('Resposta não é JSON válido, mas operação foi bem sucedida', parseError);
+        }
       }
 
       // Notificar o componente pai para remover o grupo
@@ -149,18 +161,19 @@ export function MessageSelector({ messages, onSelectMessage, onUpdateMessage, on
             <span className="text-sm text-slate-700">Mensagens selecionadas:</span>
           </div>
           <div className="pl-6 space-y-3">
-            {selectedMessage.mensagens.map((msg) => (
-              <div key={msg.id} className="space-y-2">
-                <p className="font-medium text-slate-900">{msg.categoria}</p>
+            {selectedMessage.mensagens.some(m => m.categoria === 'Geral') ? (
+              // Exibição especial para mensagem geral
+              <div className="space-y-2">
+                <p className="font-medium text-slate-900">📢 Mensagem para todas as categorias</p>
                 <div className="bg-white rounded-lg p-3 space-y-2 border border-slate-200">
-                  {msg.midiaBase64 && msg.midiaExtension && (
+                  {selectedMessage.mensagens[0].midiaBase64 && selectedMessage.mensagens[0].midiaExtension && (
                     <div className="mb-2">
-                      {msg.midiaExtension.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                      {selectedMessage.mensagens[0].midiaExtension.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                         <div className="flex items-center gap-2 text-sm text-slate-600">
                           <ImageIcon className="w-4 h-4" />
                           <span>Imagem anexada</span>
                         </div>
-                      ) : msg.midiaExtension === '.mp4' ? (
+                      ) : selectedMessage.mensagens[0].midiaExtension === '.mp4' ? (
                         <div className="flex items-center gap-2 text-sm text-slate-600">
                           <Video className="w-4 h-4" />
                           <span>Vídeo anexado</span>
@@ -168,17 +181,49 @@ export function MessageSelector({ messages, onSelectMessage, onUpdateMessage, on
                       ) : (
                         <div className="flex items-center gap-2 text-sm text-slate-600">
                           <FileText className="w-4 h-4" />
-                          <span>Arquivo anexado ({msg.midiaExtension})</span>
+                          <span>Arquivo anexado ({selectedMessage.mensagens[0].midiaExtension})</span>
                         </div>
                       )}
                     </div>
                   )}
-                  {msg.conteudo && (
-                    <p className="text-sm text-slate-700">{msg.conteudo}</p>
+                  {selectedMessage.mensagens[0].conteudo && (
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{decodeUnicode(selectedMessage.mensagens[0].conteudo)}</p>
                   )}
                 </div>
               </div>
-            ))}
+            ) : (
+              // Exibição normal para mensagens por categoria
+              selectedMessage.mensagens.map((msg) => (
+                <div key={msg.id} className="space-y-2">
+                  <p className="font-medium text-slate-900">{msg.categoria}</p>
+                  <div className="bg-white rounded-lg p-3 space-y-2 border border-slate-200">
+                    {msg.midiaBase64 && msg.midiaExtension && (
+                      <div className="mb-2">
+                        {msg.midiaExtension.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <ImageIcon className="w-4 h-4" />
+                            <span>Imagem anexada</span>
+                          </div>
+                        ) : msg.midiaExtension === '.mp4' ? (
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <Video className="w-4 h-4" />
+                            <span>Vídeo anexado</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <FileText className="w-4 h-4" />
+                            <span>Arquivo anexado ({msg.midiaExtension})</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {msg.conteudo && (
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{decodeUnicode(msg.conteudo)}</p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -223,18 +268,19 @@ export function MessageSelector({ messages, onSelectMessage, onUpdateMessage, on
                       </div>
                       
                       <div className="space-y-3 pl-3 border-l-2 border-slate-200">
-                        {group.mensagens.map((msg) => (
-                          <div key={msg.id} className="space-y-2">
-                            <p className="font-medium text-slate-900">{msg.categoria}</p>
+                        {group.mensagens.some(m => m.categoria === 'Geral') ? (
+                          // Exibição especial para mensagem geral no popup
+                          <div className="space-y-2">
+                            <p className="font-medium text-slate-900">📢 Mensagem para todas as categorias</p>
                             <div className="bg-slate-50 rounded-lg p-3 space-y-2 border border-slate-200">
-                              {msg.midiaBase64 && msg.midiaExtension && (
+                              {group.mensagens[0].midiaBase64 && group.mensagens[0].midiaExtension && (
                                 <div className="mb-2">
-                                  {msg.midiaExtension.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                  {group.mensagens[0].midiaExtension.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                     <div className="flex items-center gap-2 text-sm text-slate-600">
                                       <ImageIcon className="w-4 h-4" />
                                       <span>Imagem anexada</span>
                                     </div>
-                                  ) : msg.midiaExtension === '.mp4' ? (
+                                  ) : group.mensagens[0].midiaExtension === '.mp4' ? (
                                     <div className="flex items-center gap-2 text-sm text-slate-600">
                                       <Video className="w-4 h-4" />
                                       <span>Vídeo anexado</span>
@@ -242,17 +288,49 @@ export function MessageSelector({ messages, onSelectMessage, onUpdateMessage, on
                                   ) : (
                                     <div className="flex items-center gap-2 text-sm text-slate-600">
                                       <FileText className="w-4 h-4" />
-                                      <span>Arquivo anexado ({msg.midiaExtension})</span>
+                                      <span>Arquivo anexado ({group.mensagens[0].midiaExtension})</span>
                                     </div>
                                   )}
                                 </div>
                               )}
-                              {msg.conteudo && (
-                                <p className="text-sm text-slate-700">{msg.conteudo}</p>
+                              {group.mensagens[0].conteudo && (
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap">{decodeUnicode(group.mensagens[0].conteudo)}</p>
                               )}
                             </div>
                           </div>
-                        ))}
+                        ) : (
+                          // Exibição normal para mensagens por categoria
+                          group.mensagens.map((msg) => (
+                            <div key={msg.id} className="space-y-2">
+                              <p className="font-medium text-slate-900">{msg.categoria}</p>
+                              <div className="bg-slate-50 rounded-lg p-3 space-y-2 border border-slate-200">
+                                {msg.midiaBase64 && msg.midiaExtension && (
+                                  <div className="mb-2">
+                                    {msg.midiaExtension.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                                        <ImageIcon className="w-4 h-4" />
+                                        <span>Imagem anexada</span>
+                                      </div>
+                                    ) : msg.midiaExtension === '.mp4' ? (
+                                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                                        <Video className="w-4 h-4" />
+                                        <span>Vídeo anexado</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                                        <FileText className="w-4 h-4" />
+                                        <span>Arquivo anexado ({msg.midiaExtension})</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {msg.conteudo && (
+                                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{decodeUnicode(msg.conteudo)}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   </button>
@@ -345,7 +423,7 @@ export function MessageSelector({ messages, onSelectMessage, onUpdateMessage, on
                     </div>
                   )}
                   {msg.conteudo && (
-                    <p className="text-sm text-muted-foreground">{msg.conteudo}</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{decodeUnicode(msg.conteudo)}</p>
                   )}
                 </div>
               ))}
