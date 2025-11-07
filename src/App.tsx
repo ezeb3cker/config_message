@@ -8,6 +8,7 @@ import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Send, Loader2, CheckCircle2, Plus, MessageSquare, Clock } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { decodeUnicode } from './components/utils/decodeUnicode';
 
 export default function App() {
   const [messages, setMessages] = useState<any>(null);
@@ -35,32 +36,13 @@ export default function App() {
         };
       }
 
-      // Parse do campo conteudo se vier como string JSON
-      let messageData = {
-        conteudo: item.conteudo,
-        midiaExtension: item.midiaExtension,
-        midiaBase64: item.midiaBase64
+      // Usar o novo formato da API que retorna messageText diretamente
+      const rawContent = item.messageText || item.conteudo || '';
+      const messageData = {
+        conteudo: decodeUnicode(rawContent), // Decodificar emojis unicode
+        midiaExtension: item.midiaExtension || undefined,
+        midiaBase64: item.midiaBase64 || undefined
       };
-
-      try {
-        // Tentar fazer parse do conteudo como JSON
-        if (typeof item.conteudo === 'string' && item.conteudo.trim().startsWith('[')) {
-          const parsedContent = JSON.parse(item.conteudo);
-          
-          // Se for um array, pegar o primeiro elemento
-          if (Array.isArray(parsedContent) && parsedContent.length > 0) {
-            const contentObj = parsedContent[0];
-            messageData = {
-              conteudo: contentObj.messageText || '',
-              midiaExtension: contentObj.midiaExtension || undefined,
-              midiaBase64: contentObj.midiaBase64 || undefined
-            };
-          }
-        }
-      } catch (e) {
-        // Se não for JSON válido, manter os valores originais
-        console.warn('Não foi possível fazer parse do conteudo:', e);
-      }
 
       acc[key].mensagens.push({
         id: item.id,
@@ -94,13 +76,26 @@ export default function App() {
           throw new Error('Erro ao buscar mensagens do webhook');
         }
 
-        const flatMessages = await response.json();
-        
-        // Se a resposta for um array vazio ou não houver mensagens, definir como array vazio
-        if (Array.isArray(flatMessages) && flatMessages.length > 0) {
-          const groupedMessages = groupMessagesByDisparoId(flatMessages);
-          setMessages(groupedMessages);
-        } else {
+        // Verificar se há conteúdo antes de fazer parse
+        const text = await response.text();
+        if (!text || text.trim() === '') {
+          // Resposta vazia - definir como array vazio
+          setMessages([]);
+          return;
+        }
+
+        try {
+          const flatMessages = JSON.parse(text);
+          
+          // Se a resposta for um array vazio ou não houver mensagens, definir como array vazio
+          if (Array.isArray(flatMessages) && flatMessages.length > 0) {
+            const groupedMessages = groupMessagesByDisparoId(flatMessages);
+            setMessages(groupedMessages);
+          } else {
+            setMessages([]);
+          }
+        } catch (parseError) {
+          console.error('Erro ao fazer parse do JSON:', parseError);
           setMessages([]);
         }
       } catch (error) {
@@ -190,11 +185,20 @@ export default function App() {
         throw new Error('Erro ao disparar mensagens');
       }
 
-      // A resposta deve ser um array de resultados
-      const results = await response.json();
+      // Verificar se há conteúdo antes de fazer parse
+      const text = await response.text();
+      let results = null;
+      
+      if (text && text.trim() !== '') {
+        try {
+          results = JSON.parse(text);
+        } catch (parseError) {
+          console.warn('Resposta não é JSON válido, mas operação foi bem sucedida', parseError);
+        }
+      }
       
       // Verificar se temos resultados válidos com status e msg
-      if (Array.isArray(results)) {
+      if (results && Array.isArray(results)) {
         const successCount = results.filter(r => r.status === "202").length;
         
         if (successCount === results.length) {
