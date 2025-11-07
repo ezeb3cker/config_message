@@ -8,6 +8,7 @@ import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Send, Loader2, CheckCircle2, Plus, MessageSquare, Clock } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { Toaster } from './components/ui/sonner';
 import { decodeUnicode } from './components/utils/decodeUnicode';
 
 export default function App() {
@@ -231,8 +232,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 pb-32 flex items-center justify-center">
-      <div className="w-full max-w-4xl">
+    <>
+      <Toaster />
+      <div className="min-h-screen p-4 sm:p-6 pb-32 flex items-center justify-center">
+        <div className="w-full max-w-4xl">
         {/* Card Principal com Logo e Conteúdo */}
         <Card className="p-6 sm:p-10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.4)] border-slate-200/20">
           {/* Logo */}
@@ -405,6 +408,7 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

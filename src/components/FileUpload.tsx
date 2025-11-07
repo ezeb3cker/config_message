@@ -87,13 +87,21 @@ export function FileUpload({ onFileSelected, onSpreadsheetDataExtracted, uploade
 
       if (!hasCategoria || !hasContactColumn) {
         const missingColumns = [];
-        if (!hasCategoria) missingColumns.push('categoria');
-        if (!hasContactColumn) missingColumns.push('número/telefone/celular');
+        if (!hasCategoria) missingColumns.push('"Categoria"');
+        if (!hasContactColumn) missingColumns.push('"Número", "Telefone" ou "Celular"');
         
-        toast.error(
-          `O arquivo não possui ${missingColumns.length === 1 ? 'a coluna obrigatória' : 'as colunas obrigatórias'}: ${missingColumns.join(', ')}. ` +
-          'Certifique-se de que a primeira linha do arquivo contém essas colunas.'
-        );
+        let errorMessage = '';
+        if (!hasCategoria && !hasContactColumn) {
+          errorMessage = `O arquivo não possui as colunas obrigatórias: ${missingColumns.join(' e ')}. Para prosseguir, adicione estas colunas na primeira linha do arquivo.`;
+        } else if (!hasCategoria) {
+          errorMessage = `Falta a coluna "Categoria" no arquivo. Adicione esta coluna na primeira linha para prosseguir.`;
+        } else {
+          errorMessage = `Falta uma coluna de contato no arquivo. Adicione uma coluna com o nome "Número", "Telefone" ou "Celular" na primeira linha para prosseguir.`;
+        }
+        
+        toast.error(errorMessage, {
+          duration: 6000,
+        });
         
         setFile(null);
         onFileSelected(null);
